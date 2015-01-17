@@ -1,0 +1,44 @@
+\documentclass[11pt,a4paper,openany,twoside]{book}
+\input{setup/package.tex}   %引用宏包所在位置
+\input{setup/format.tex}    %格式所在位置
+\begin{document}
+%\pagenumbering{Roman}    %Roman字体书写页码
+%---------------------------------------------------封面等-----------------------
+\include{preface/cover}                         %封面
+\include{preface/intro}                          %简介
+%\include{preface/intro2}                        %序
+\include{preface/preface}                   	    %前言
+\include{preface/preface2}                     %前言
+\include{appendix/acknowledgements}
+%\include{preface/c_abstract}             %中文摘要
+%\include{preface/e_abstract}             %英文摘要
+%-------------------------------------目录部分------------------------------------------
+\setcounter{page}{1}   %重新开始页码
+\renewcommand\contentsname{目\qquad 录}
+%-------------------下面三行去掉了目录首页页码---------------------
+\makeatletter
+\let\ps@plain\ps@empty
+\makeatother
+%-------------------------------------------------------------------------
+\tableofcontents                                    %目录
+%\addtocontents{toc}{\protect\begin{multicols}{2}}       %目录分两栏开始
+\mainmatter    %前言和目录页码结束，正文重新开始设置页码
+%-----------------------------------------正文开始------------------------------
+%\include{book/chap1}       %第一章
+%\include{book/chap2}       %第二章
+%\include{book/chap3}       %第三章
+%\include{book/chap4}       %第四章
+%\include{book/chap5}       %第五章
+%\include{book/chap6}       %第六章
+%\include{book/chap7}       %第七章
+%\include{book/chap8}       %第八章
+%\include{book/chap9}       %第九章
+\include{book/chap26}
+%\addtocounter{chapter}{7}
+%-----------------------------------------正文结束------------------------------
+\include{book/answer}      %习题答案
+%\addtocontents{toc}{\protect\end{multicols}}   %目录分两栏结束
+\include{reference/references}                               %参考文献部分
+\clearpage
+\end{document}
+

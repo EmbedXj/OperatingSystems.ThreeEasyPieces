@@ -1,0 +1,80 @@
+%-----------------------------------------------------主文档 格式定义---------------------------------
+\addtolength{\headsep}{-0.1cm}        %页眉位置
+%\addtolength{\footskip}{0.4cm}       %页脚位置
+%-----------------------------------------------------设定字体等------------------------------
+\setmainfont{Times New Roman}    % 缺省字体
+
+\setCJKmainfont{SimSun}
+\setCJKsansfont{SimHei}
+\setCJKmonofont{FangSong}
+\setCJKfamilyfont{song}{SimSun}
+\setCJKfamilyfont{hei}{SimHei}
+\setCJKfamilyfont{kai}{KaiTi}
+\setCJKfamilyfont{fs}{FangSong}
+\setCJKfamilyfont{li}{LiSu}
+\setCJKfamilyfont{you}{YouYuan}
+%\setCJKfamilyfont{yahei}{Microsoft YaHei}
+%\setCJKfamilyfont{xingkai}{STXingkai}
+\setCJKfamilyfont{xinwei}{STXinwei}
+\setCJKfamilyfont{fzyao}{FZYaoTi}
+\setCJKfamilyfont{fzshu}{FZShuTi}
+%-------------------------------------------------------------------
+\newCJKfontfamily\song{SimSun}
+\newCJKfontfamily\hei{SimHei}
+\newCJKfontfamily\kai{KaiTi}
+\newCJKfontfamily\fs{FangSong}
+\newCJKfontfamily\li{LiSu}
+\newCJKfontfamily\you{YouYuan}
+\newCJKfontfamily\yahei{Microsoft YaHei}
+%\newCJKfontfamily\xingkai{STXingkai}
+\newCJKfontfamily\xinwei{STXinwei}
+\newCJKfontfamily\fzyao{FZYaoTi}
+\newCJKfontfamily\fzshu{FZShuTi}
+%-----------------------------------------------------------定义颜色---------------
+\definecolor{black}{rgb}{0.0, 0.0, 0.0}
+\definecolor{grey}{rgb}{0.9,0.9,0.9}
+\definecolor{blueblack}{cmyk}{0,0,0,0.35}%浅黑
+\definecolor{darkblue}{cmyk}{1,0,0,0}%纯蓝
+\definecolor{lightblue}{cmyk}{0.15,0,0,0}%浅蓝
+
+%------------------------listings代码格式--------------------------
+\lstset{language=C,tabsize=4,keepspaces=true,
+	breakindent=22pt, 
+	%numbers=left,stepnumber=1,numberstyle=\footnotesize,
+	basicstyle=\small,
+	showspaces=false,
+	flexiblecolumns=true,
+	breaklines=true,breakautoindent=true,breakindent=4em,
+	extendedchars=false,
+	%frame=tb,
+	escapeinside=``
+}
+
+%-----------------------------------------------------------定义、定理环境-------------------------
+\newcounter{myDefinition}[chapter]\def\themyDefinition{\thechapter.\arabic{myDefinition}}
+\newcounter{myTheorem}[chapter]\def\themyTheorem{\thechapter.\arabic{myTheorem}}
+\newcounter{myCorollary}[chapter]\def\themyCorollary{\thechapter.\arabic{myCorollary}}
+
+\tcbmaketheorem{defi}{定义}{fonttitle=\bfseries\upshape, fontupper=\slshape, arc=0mm, colback=lightblue,colframe=darkblue}{myDefinition}{Definition}
+\tcbmaketheorem{theo}{定理}{fonttitle=\bfseries\upshape, fontupper=\slshape, arc=0mm, colback=lightblue,colframe=darkblue}{myTheorem}{Theorem}
+\tcbmaketheorem{coro}{推论}{fonttitle=\bfseries\upshape, fontupper=\slshape, arc=0mm, colback=lightblue,colframe=darkblue}{myCorollary}{Corollary}
+%------------------------------------------------------------------------------
+\newtheorem{proof}{\indent\hei \textcolor{darkblue}{证明}}
+\newtheorem{Solution}{\indent\hei \textcolor{darkblue}{解}}
+%------------------------------------------------定义页眉下单隔线----------------
+\newcommand{\makeheadrule}{\makebox[0pt][l]{\color{black}\rule[.7\baselineskip]{\headwidth}{0.3pt}}\vskip-.8\baselineskip}
+
+%-----------------------------------------------定义页眉下双隔线----------------
+\makeatletter
+\renewcommand{\headrule}{{\if@fancyplain\let\headrulewidth\plainheadrulewidth\fi\makeheadrule}}
+\pagestyle{fancy}
+\renewcommand{\chaptermark}[1]{\markboth{第\chaptername 章\quad #1}{}}    %去掉章标题中的数字
+\renewcommand{\sectionmark}[1]{\markright{\thesection\quad #1}{}}    %去掉节标题中的点
+\fancyhf{} %清空页眉
+\fancyhead[RO]{\kai{\footnotesize.~\color{black}\thepage~.}}         % 奇数页码显示左边
+\fancyhead[LE]{\kai{\footnotesize.~\color{black}\thepage~.}}         % 偶数页码显示右边
+\fancyhead[CO]{\song\footnotesize\color{black}\rightmark} % 奇数页码中间显示节标题
+\fancyhead[CE]{\song\footnotesize\color{black}\leftmark}  % 偶数页码中间显示章标题
+%---------------------------------------------------------------------------------------------------------------------
+
+
