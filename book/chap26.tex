@@ -27,7 +27,7 @@
 
 主程序创建两个线程，每个都执行函数mythread()，但是传递不同的参数（字符串『A』或『B』）。一旦创建了线程，它可能会立即运行（取决于调度器的whims）；也可能会进入『就绪』态而非『运行』态，因此不立即执行。创建两个线程之后（T1和T2），主线程调用pthread\_join()等待对应的线程结束。
 \begin{figure}[t]
-\begin{lstlisting}[numbers=left,stepnumber=1,numberstyle=\footnotesize]
+\begin{lstlisting}
 #include <stdio.h>
 #include <assert.h>
 #include <pthread.h>
@@ -130,8 +130,8 @@ prints "main:end" &  &  \\
 \end{table}
 \clearpage
 
-%\begin{figure}[t]
-\begin{lstlisting}[numbers=left,stepnumber=1,numberstyle=\footnotesize]
+
+\begin{lstlisting}
 #include <stdio.h>
 #include <pthread.h>
 #include "mythreads.h"
@@ -166,8 +166,10 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 \end{lstlisting}
-%\caption{共享数据}
-%\end{figure}
+
+\begin{figure}[h]
+\caption{共享数据}
+\end{figure}
 
 \section{为何更糟糕：共享数据}
 上一节简单的线程示例可以有效的解释线程是如何被创建，以及它们是如何按照不同的顺序运行，这个执行顺序决定于调度器决定如何运行它们。这个示例并没有展示线程间在访问共享数据时是如何交互的。
@@ -181,7 +183,7 @@ int main(int argc, char *argv[]) {
 最后也是最重要的，我们可以看每个工作线程试图做的事：共享变量counter加1，这个操作在循环中执行一千万次。因此，理想的最终结果是：20,000,000。
 
 现在编译执行这个程序，看一下它的结果。有时候，everything works how we might expect：
-\begin{lstlisting}[language=C]
+\begin{verbatim}
 prompt> gcc -o main main.c -Wall -pthread
 prompt> ./main
 main: begin (counter = 0)
@@ -190,10 +192,10 @@ B: begin
 A: done
 B: done
 main: done with both (counter = 20000000)
-\end{lstlisting}
+\end{verbatim}
 
 不幸的是，当我们运行这段代码时，即使是在一个处理器上，我们也得不到那个预期的结果。有时，结果如下：
-\begin{lstlisting}[language=C]
+\begin{verbatim}
 prompt> ./main
 main: begin (counter = 0)
 A: begin
@@ -201,10 +203,10 @@ B: begin
 A: done
 B: done
 main: done with both (counter = 19345221)
-\end{lstlisting}
+\end{verbatim}
 
 我们再试一次，看看是不是我们疯狂了。毕竟，如你所接受的教育，计算机并不认为会产生确定性结果。也许你的处理器欺骗了你？（等我喘口气）
-\begin{lstlisting}[language=C]
+\begin{verbatim}
 prompt> ./main
 main: begin (counter = 0)
 A: begin
@@ -212,7 +214,7 @@ B: begin
 A: done
 B: done
 main: done with both (counter = 19221041)
-\end{lstlisting}
+\end{verbatim}
 
 不仅每一个都是错误的结果，而且每个结果还不一样！大大的疑问：为什么会发生这样的事儿呢？
 
@@ -221,18 +223,18 @@ main: done with both (counter = 19221041)
 \end{center}
 
 你总是需要学习心得工具来帮助你编写、调试和理解计算机系统。这里我们使用一个小巧的工具：反汇编器（disassembler）。当你对一个可执行文件执行反汇编时，它会显示这个可执行文件是有哪些会变代码组成的。例如，如果你希望理解例子中更新counter的底层代码，运行objdump（Linux）来它的汇编代码：
-\begin{lstlisting}[language=C]
+\begin{verbatim}
 prompt> objdump -d main
-\end{lstlisting}
+\end{verbatim}
 \end{tcolorbox}
 
 \section{核心问题：失控的调度}
 为了理解为何会发生这样的事儿，我们需要理解编译器为更新counter而生成的指令序列。在这个例子里，我们希望简简单单的将counter加1。因此，做这一操作的指令序列也许应该如下（x86）：
-\begin{lstlisting}[language=C]
+\begin{verbatim}
 mov 0x8049a1c, %eax
 add $0x1, %eax
 mov %eax, 0x8049a1c
-\end{lstlisting}
+\end{verbatim}
 
 这个例子假设变量counter分配的地址是0x8049a1c。在这个三指令的序列里，x86的mov指令首先取得该地址的内存值并将其放入寄存器eax中，然后，执行add操作，eax寄存器的值加1，最后，eax的值写回原先的内存地址。
 
@@ -245,11 +247,11 @@ mov %eax, 0x8049a1c
 简单的说，事儿是这样的：counter加1的代码执行了两次，但是初值为50的counter现在只有51。但是这个程序『正确的』结果应当是变量counter值为52。
 
 我们来看一下详细的执行路径以便更好的理解这个问题。对于这个例子，假设上述的代码加载到内存地址100处，如下图所示的指令序列（注意那些曾经优秀的精简指令集：x86有变长指令；这里的mov指令占5字节的内存，add指令仅占3字节）：
-\begin{lstlisting}[language=C]
+\begin{verbatim}
 100 mov 0x8049a1c, %eax
 105 add $0x1, %eax
 108 mov %eax, 0x8049a1c
-\end{lstlisting}
+\end{verbatim}
 基于这些假设，上述发生的事儿如表26.4所示。假设counter起始值是50，然后跟踪这个例子确保你可以理解正在发生什么。
 \begin{table}[h]
 {\footnotesize
@@ -285,18 +287,18 @@ mov %eax, 0x8049a1c
 \section{原子性的愿望}
 解决这个问题的一个办
 法是更强大的指令，这些指令可以在单步之内做任何我们需要做的，因此避免了发生不合时宜的中断的可能性。例如，假如我们有一个像下面所示一样的超级指令，会怎样呢？
-\begin{lstlisting}[language=C]
-memory-add 0x8049a1c, \$0x1
-\end{lstlisting}
+\begin{verbatim}
+memory-add 0x8049a1c, $0x1
+\end{verbatim}
 
 假设这条指令将一个值加到该内存地址，并硬件保证它是原子执行的；当这条指令执行后，它将按照预想的那样执行更新操作。它不会在指令执行中被中断，因为正是我们从硬件那儿得到的保证：当中断发生时，这条指令要么没有执行，要么已经执行结束；没有中间状态。硬件可以如此的美好，不是么？
 
 在此文中，原子性意味着『作为一个单位』，有时称之为『全或无』。我们想原子地执行这三条指令序列：
-\begin{lstlisting}[language=C]
+\begin{verbatim}
 mov 0x8049a1c, %eax
 add $0x1, %eax
 mov %eax, 0x8049a1c
-\end{lstlisting}
+\end{verbatim}
 
 如之前所说的，如果有一条单独指令能够完成这个操作，那么只需要发出指令即可完成。但是通常情况下，没有这样的指令。设想我们已经构建了一个并发的B树，此时想要更新它；难道要硬件支持『B树的原子更新』指令么？恐怕不可能，至少在合理的指令集中是如此。
 

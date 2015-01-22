@@ -1,0 +1,299 @@
+\chapter{插曲：线程API}
+\thispagestyle{empty}
+
+本章简要讲解线程API的主要内容。每个部分将会按照介绍如何使用这些API的顺序，在后续章节进行详细解释。更多的细节可以在许多书和在线资源里找到[B97，B+96，K+96]。需要注意，由于有很多的例子，接下来锁和条件变量概念的章节讲起来会很慢；因此，本章用作一个引用会更好些。
+
+\begin{tcolorbox}[colframe=grey,colback= grey,arc=0pt,left=6pt,right=6pt,top=6pt,bottom=6pt,boxsep=0pt]
+\begin{center}关键：如何创建并控制线程
+\end{center}
+操作系统应该为线程创建和控制提供什么接口？应该如何设计这些接口，使之跟一般程序接口一样使用自如？
+\end{tcolorbox}
+
+\section{线程创建}
+编写多线程程序，首先要做的就是创建新线程；因此，需要存在某种线程创建接口。在POSIX中，很简单：
+\begin{verbatim}
+#include <pthread.h>
+int  pthread_create( pthread_t * thread,  const pthread_attr_t * attr,
+                     void * (*start_routine)(void*),  void * arg);
+\end{verbatim}
+这个声明貌似有点小复杂（特别是当你没有用过C语言的函数指针），其实这并不糟糕。这里有四个参数：thread，attr，start\_routine，arg。第一个参数thread是一个指向pthread\_t结构体的指针；我们将会用这个结构体与起对应的线程进行交互，因此我们需要将它传给pthread\_create()函数初始化。
+
+第二个参数attr，用来指定一些这个线程可能需要的一些属性。比如设置栈大小，或者这个线程的调度优先级的信息等。可以单独调用pthread\_attr\_init()函数来初始化一个属性；欲知详情，请查阅对应手册。然而，许多情况下，默认属性就可以了，这样的话，给该参数传递一个NULL即可。
+
+第三个参数是最复杂的，实际上它只是想知道：这个线程从哪个函数开始运行？在C语言中，称之为函数指针。这个函数指针告诉我们一下信息：函数名（start\_routine），传递给该函数一个void *类型的参数（如start\_routine括号之后表示的），以及该函数一个类型为void *的返回值（例如：空指针）。
+
+如果这个函数指针想要的不是空指针，而是一个整型参数，其声明如下：
+\begin{verbatim}
+int pthread_create(..., // 前两个参数一样
+                    void * (*start_routine)(int), int arg);
+\end{verbatim}
+如果函数指针希望传一个空指针参数，但是要返回一个整型值，则其声明如下：
+\begin{verbatim}
+int pthread_create(..., // 前两个参数一样
+                    int (*start_routine)(void *), void * arg);
+\end{verbatim}
+
+最后，第四个参数arg实际上就是传递个函数指针的参数。你可能会有疑问：为什么需要这些空指针呢？其实答案很简单：start\_routine函数有了一个空指针作为参数，就可以传递任意类型的参数给它了；有一个空指针的返回值就允许线程返回任意类型的结果。
+\begin{figure}[h]
+\begin{lstlisting}
+#include <pthread.h>
+
+typedef struct __myarg_t {
+	int a;
+	int b;
+}myarg_t;
+
+void *mythread(void *arg) {
+	myarg_t *m = (myarg_t *) arg;
+	printf("%d %d\n", m->a, m->b);
+	return NULL; 
+}
+
+int main(int argc, char *argv[]) {
+	pthread_t p;
+	int rc;
+	myarg_t args;
+	args.a = 10;
+	args.b = 20;
+	rc = pthread_create(&p, NULL, mythread, &args);
+	...
+}
+\end{lstlisting}
+\caption{创建线程}
+\end{figure}
+
+我们来看图27.1的例子。仅创建了一个传递了两个参数的线程，这两个参数组成自己定义的类型（myarg\_t）。一旦创建后，这个线程就可以简单地将它的参数转化成想要的类型，并可按预期得到这些参数。
+
+一旦创建了线程，就会存在一个新的存活的执行实体，与它自己的调用栈一起完成，跟程序中所有存在的线程一样运行在相同的地址空间。快乐之旅由此开始！
+
+\begin{lstlisting}
+#include <stdio.h>#include <pthread.h>#include <assert.h>#include <stdlib.h>
+
+typedef struct __myarg_t {	int a;
+	int b;} myarg_t;typedef struct __myret_t {	int x;
+	int y;} myret_t;void *mythread(void *arg) {	myarg_t *m = (myarg_t *) arg;	printf("%d %d\n", m->a, m->b);	myret_t *r = Malloc(sizeof(myret_t));	r->x = 1;	r->y = 2;	return (void *) r;}int main(int argc, char *argv[]) {	int rc;	pthread_t p;	myret_t *m;
+
+	myarg_t args;	args.a = 10;	args.b = 20;	Pthread_create(&p, NULL, mythread, &args);	Pthread_join(p, (void **) &m);	printf("returned %d %d\n", m->x, m->y);	return 0;}
+\end{lstlisting}
+\begin{figure}[h]
+\setlength{\abovecaptionskip}{1pt}
+\caption{等待线程完成}
+\setlength{\belowcaptionskip}{1pt}
+\end{figure}
+
+\section{线程完成（completion）}
+之前的例子展示了如何创建一个线程。然而，如果想要等待一个线程的完成会发生什么呢？你需要做一些特别的事儿来等待线程完成；特别的，你需要调用的pthread\_join()函数。
+\begin{verbatim}
+int pthread_join(pthread_t thread, void **value_ptr);
+\end{verbatim}
+这个函数只有两个参数，第一个参数是pthread\_t类型，用来指定要等待哪个线程。实际上就是在创建线程时传递给线程库的那个值；如果持有这个值，那么现在就可以用来等待那个线程的运行终止。
+
+第二个参数是一个指向你想要取回的返回值的指针。因为这个函数可以返回任意值，故其定义成了一个空指针；由于pthread\_join会改变传给它的参数，故应该传递该值的指针，而不是值本身。
+
+我们来看另外一个例子（图27.2）。在这段代码里，还是创建了一个线程，并通过myarg\_t结构体传递了一对参数。返回值用到了myret\_t类型。一旦这个线程结束运行，正等在pthread\_join()的主线程就会返回，并且可以访问从线程返回的值，即myret\_t里的内容。
+
+
+
+这个例子有几个注意点。第一，大多数时候我们不需要做所有这些痛苦的 packing and unpacking of arguments的事儿。例如，如果我们仅需创建一个无参的线程，传递一个NULL作为参数即可。类似的，如果我们不关心返回值的话，可以给pthread\_join()传一个NULL。
+第二，如果我们仅传一个值的话（如int），就不需要package它作为一个参数。图27.3就是一个例子。这种情况下，由于我们不需要将参数和返回值package成结构体，就简单了很多。
+
+\begin{figure}[h]
+\begin{lstlisting}
+void *mythread(void *arg) {	int m = (int) arg;	printf("%d\n", m);	return (void *) (arg + 1);}
+
+int main(int argc, char *argv[]) {	pthread_t p;	int rc, m;	Pthread_create(&p, NULL, mythread, (void *) 100);	Pthread_join(p, (void **) &m);	printf("returned %d\n", m);	return 0;}
+\end{lstlisting}
+\setlength{\abovecaptionskip}{2pt}
+\caption{等待线程完成}
+\end{figure}
+
+第三，需要非常注意返回值是如何从线程返回的。尤其，不要返回一个指向了线程调用栈中分配的值的指针。如果这么做了，你觉得会发生什么呢？（考虑一下）这里是一段问题代码的例子，改自图27.2中的例子。
+
+\begin{verbatim}
+void *mythread(void *arg) {    myarg_t *m = (myarg_t *) arg;    printf("%d %d\n", m->a, m->b);    myret_t r; // 分配在栈中: BAD!    r.x = 1;    r.y = 2;    return (void *) &r;}
+\end{verbatim}
+
+在这种情况下，变量r是在mythread的栈中分配的。然而，当线程返回时，这个值会自动释放（这就是为什么栈使用起来这么简单）。因此，传回去的指针就是一个未分配的变量，可能会导致各种错误结果。当然，当你输出你觉得你返回了的值时，你很可能（不一定）会感到奇怪。可以自己试试看！【2. 幸运的是当你这样的代码时，编译器gcc可能会抱怨的，这也是一个注意编译器警告的原因】
+
+最后，你可能注意到使用pthread\_create()创建线程之后，紧接着就调用了pthread\_join()，这种创建线程的方式很奇怪。实际上，有一种更容易的方式来完成这样的任务，叫做过程调用。通常我们会创建不止一个线程并等待它完成，否则完全没有使用多线程的意义。
+
+我们应该注意到并不是所有的多线程代码都使用join函数。例如，一个多线程web服务器可能创建多个工作线程（worker），然后使用主线程accept请求并将之传给工作线程（worker）。因此，这样长生存期的程序也许就不需要join。然而，一个创建多个线程去并行执行特定任务并行程序很可能会用join来确保所有的工作都完成，才退出或进入下一阶段工作。
+
+\section{锁}
+除了线程创建（creation）和合并（join），也许，POSIX线程库提供的最有用的一些列函数是通过锁（locks）来为临界区提供互斥量的函数。这对最基础的函数由下列两个函数提供：
+\begin{verbatim}
+int pthread_mutex_lock(pthread_mutex_t *mutex);
+int pthread_mutex_unlock(pthread_mutex_t *mutex);
+\end{verbatim}
+
+这两个函数应该很容易理解和使用。当你实现的一段代码是临界区时，需要用锁来保护以使按照预期执行。你大概可以想象一下，代码应该如下：
+\begin{verbatim}
+pthread_mutex_t lock;
+pthread_mutex_lock(&lock);
+x = x + 1; // or whatever your critical section is
+pthread_mutex_unlock(&lock);
+\end{verbatim}
+
+这段代码的意思是这样的：如果在调用pthread\_mutex\_lock()时没有其他的线程持有这个锁，这个线程就取获取这个锁，并进入临界区。如果其他线程已经持有这个锁，则这个试图获取锁的线程会阻塞直到获取到锁（意味着那个持有锁的线程已经调用unlock释放了这个锁）。当然，有可能在一个给定的时间会有很多线程卡在线程获取函数；只有那个获取到锁的调用unlock。【*****】
+
+可惜，这段代码在两个地方有问题。第一个问题是：未有合适的初始化。所有的锁都必须被正确地初始化，以保证它们都有正确的初始值，以及在调用lock和unlock时能够正常工作。
+
+在POSIX线程中，有两种初始化锁的方式。一种是用 PTHREAD\_MUTEX\_INITIALIZER来初始化，如下：
+\begin{verbatim}
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+\end{verbatim}
+
+这种方式将锁设置为默认值并设为可用。另一种动态方式是调用 pthread\_mutex\_init()，如下：
+\begin{verbatim}
+int rc = pthread_mutex_init(&lock, NULL);
+assert(rc == 0); // always check success!
+\end{verbatim}
+
+第一个参数是锁的地址，而第二个参数是一个可选的属性集。关于该属性集可以自己查阅；简单地传递NULL则是使用默认方式。上述的两种方式都可以，但我们通常使用动态的方法（后者）。注意，当锁使用结束时，相应的要调用 pthread\_mutex\_destroy()。可参见相应的手册获取这部分的所有细节。
+
+第二个问题是没有检测lock和unlock调用的错误码。就像你在UNIX系统中调用几乎所有的库函数一样，这些函数也可能失败！如果你的代码没有正确的检测错误码，那么错误就会默默的发生，这种情况下就有可能多个线程都进入了临界区。最起码，要用断言将其封装（如图27.4）；更多的成熟（non-toy）的程序，在出错时不能简单的退出，当lock和unlock失败时，应当检测错误并采取一些适当措施。
+
+\begin{figure}[h]
+\begin{verbatim}
+// Use this to keep your code clean but check for failures// Only use if exiting program is OK upon failurevoid Pthread_mutex_lock(pthread_mutex_t *mutex) {    int rc = pthread_mutex_lock(mutex);    assert(rc == 0);}
+\end{verbatim}
+\setlength{\abovecaptionskip}{2pt}
+\caption{简单封装}
+\end{figure}
+
+lock和unlock函数并不是pthreads仅有的锁相关函数。特别的，还有两个函数可能感兴趣函数：
+\begin{verbatim}
+int pthread_mutex_trylock(pthread_mutex_t *mutex);
+int pthread_mutex_timedlock(pthread_mutex_t *mutex,
+                            struct timespec *abs_timeout);
+\end{verbatim}
+这两个函数在获取锁时使用。trylock函数会在锁已经被持有时返回失败；timedlock函数会在得到了锁或者超时之后返回，无论那个先发生。因此，timedlock函数在超时值为0时退化成trylock函数。一般讲，要避免使用这两个函数；然而，有少部分时候为了避免阻塞在获取锁上，这两函数还是很有用的，正如下一章我们将讲到的（如：当我们研究死锁时）。
+
+\section{条件变量}
+线程库的另一个主要组件就是条件变量，当然POSIX线程也是这样。当某种信号必须在信号间发生时，条件变量是很有用的，如一个线程需要等待其他线程完成某事才能继续执行。程序希望以这种方式交互时，会常用两个函数：
+\begin{verbatim}
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+int pthread_cond_signal(pthread_cond_t *cond);
+\end{verbatim}
+
+要使用条件变量，另外还需要有一个与之关联的锁。当调用这两个函数时，都要先持有对应的锁。
+
+第一个函数，pthread\_cond\_wait()，会使调用线程休眠，等待其他线程唤醒它，通常是这个休眠的线程关心的某些事发生了改变。例如，典型的使用如下：
+\begin{verbatim}
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t init = PTHREAD_COND_INITIALIZER;
+Pthread_mutex_lock(&lock);
+while (initialized == 0)
+     Pthread_cond_wait(&init, &lock);
+Pthread_mutex_unlock(&lock);
+\end{verbatim}
+
+这段代码，在初始化了相关的锁和条件变量之后，线程检测变量initialized是否已经被设置为其他值而非0。如果没有，线程就简单的调用wait函数休眠，直到其他线程唤醒它。
+
+其他线程中唤醒这个线程的代码如下：
+\begin{verbatim}
+Pthread_mutex_lock(&lock);
+initialized = 1;
+Pthread_cond_signal(&init);
+Pthread_mutex_unlock(&lock);
+\end{verbatim}
+
+这段代码的顺序有几点要注意。首先，当发送信号时（同样在修改全局变量initialized时），总是要确保已经持有了锁。这保证了我们不会在代码中引入竞争条件。
+
+第二，你也许注意到了wait函数用了一个锁作为其第二的参数，而signal函数仅仅只有一个条件变量参数。造成这点不同的原因是，wait函数会将线程休眠，而wait函数需要在线程休眠前释放这个锁。设想一下如果不这么做：其他线程怎么获得这个锁并通知这个线程并唤醒呢？然而，在被唤醒之后，函数返回之前，pthread\_cond\_wait()函数会重新获取这个锁，因此确保了任何时间，等待线程是运行在持有锁和释放锁之间的。
+
+最后一个奇怪的是，等待线程在while循环里重复检测了这个条件，而不是一个简单的if判断语句。在后面研究条件变量的章节中会详细讨论这个问题，【这里简单的说】，一般的，用while循环是简单并安全的。虽然它重复检测这个条件（也许会增加一些负载），但是有一些pthread实现可能会虚假的唤醒等待线程；这种状况下，不重复检测的话，等待线程就会认为条件已经改变了，而实际上却没有改变。因此，将唤醒视作等待条件可能已经修改的提示而不是视作一个绝对的事实，这样会更安全一些。
+
+注意到有时候，用一个简单的flag标志在两个线程间传递信号，而不用条件变量及其关联的锁，这是很诱人的。例如，我们可以将上面的等待代码改写成这样：
+\begin{verbatim}
+while (initialized == 0)
+; // 空转
+\end{verbatim}
+
+对应的发信号的代码像这样：
+\begin{verbatim}
+initialized = 1;
+\end{verbatim}
+
+千万不要这么做，有以下几个原因。第一，许多情况下，它的性能很差（长时间空转只是在浪费CPU时间）。第二，它很容易出错。如最近的研究表明[X+10]，像上述那样在线程间使用flag标志同步，是极其容易出错的；粗略的说，使用这种临时同步方法的代码，半数都是有bug的。别偷懒，乖乖的用条件变量，即使你觉得你可以避免这个问题。
+
+\section{编译运行}
+本章所有的示例代码都是比较容易上手并运行的。要编译这些代码的话，必须包含pthread.h头文件。在链接的时候，必须加上-pthread来显示的链接线程库。
+例如，要编一个简答的多线程程序，需要做的如下：
+\begin{verbatim}
+prompt> gcc -o main main.c -Wall -pthread
+\end{verbatim}
+
+只要在main.c中包含了pthreads线程库的头文件，你就可以成功的编译并发程序了。这个程序能否如预期执行就是另一码事。
+
+\section{小结}
+本章介绍了线程库的基础内容：线程创建，通过锁创建互斥量，以及通过条件变量发信号和等待。除了耐心跟细心，不再需要其他东西就可以写出健壮高效的多线程程序。
+
+我们以一些tips结束本章，这些tips可能在你编写多线程代码时很有用（详见下一页的aside）。本章提到的API还有其他一些有意思的方面，如果你想获得更多信息，可以在Linux终端里输入man -k pthread来查看整个接口的一百多个API。然而，本章讨论的基础应该可以让你构建出优秀（也希望正确且高性能）的多线程程序。多线程最困难的不是这些API，而是你如何构建并发程序的复杂逻辑。继续阅读学习更多内容。
+
+\begin{tcolorbox}[colframe=grey,colback= grey,arc=0pt,left=6pt,right=6pt,top=6pt,bottom=6pt,boxsep=0pt]
+\begin{center}Aside：线程API指南
+\end{center}
+当你使用POSIX线程库构建一个多线程程序时，有一些细小但却很重要的注意点需要记住。他们是：
+
+\begin{itemize}
+\item \textbf{保持简单}。这一点高于一切，任何在线程间加锁或发信号的代码都要尽可能的简单。复杂的线程交互可能会导致bug。
+\item \textbf{最小化线程交互}。保持线程间交互的方式最小。每一次交互都要仔细考虑，并通过尝试和正确的方法来构造（这些方法会在接下来的章节中学习）。
+
+\item \textbf{初始化锁和条件变量}。不这么做的话，你的代码就会很奇怪，有时候好好的，有时候就出错。
+
+\item \textbf{检查返回码}。当然，在你编写的任何C和UNIX程序，都应该检查每一个返回码，这一点在并发程序中也适用。不这么做的话，可能会导致奇怪的很难理解的行为，很可能会使你要么抓狂，要么扯头发【很可能会使你抓狂】。
+
+\item \textbf{注意如何传参给线程}，如何从线程返回值。特别的，传递一个在栈中分配的变量的引用的话，很有可能你就错了。
+
+\item \textbf{每个线程都有自己的栈}。跟前一点相关的，记住每个线程都有自己的栈空间。因此，如果某个线程在执行某个函数的时候，有一个局部分配的变量，这个变量本质上是该线程私有的；任何其他线程都没法轻易的访问它。要想在线程间共享数据，该变量应当在堆（heap）中或某个全局可访问的地方。
+
+\item \textbf{永远使用条件变量在线程间传信号}。使用简单的flag标志通常是很诱人的，但是不要这么做。
+
+\item \textbf{使用手册页}。特别的，Linux的pthread手册页提供了非常有用的信息并讨论了许多本章提到的细微差别，而且更加详细。仔细阅读这些手册！
+\end{itemize}
+\end{tcolorbox}
+
+\newpage
+
+参考文献\\
+
+[B97] “Programming with POSIX Threads”\\
+David R. Butenhof\\
+Addison-Wesley,May 1997\\
+另一本关于线程的书。\\
+
+
+[B+96] “PThreads Programming:\\
+A POSIX Standard for Better Multiprocessing”\\
+Dick Buttlar, Jacqueline Farrell, Bradford Nichols\\
+O’Reilly, September 1996\\
+O’Reilly家的一本不错的书。O’Reilly是一家非常优秀且很实用的一家出版社，我们的书架有很多这家公司的书，包括一些关于Perl、Python和Javascript的非常好的作品（尤其是Crockford的《Javascript: The Good Parts》）。\\
+
+
+[K+96] “Programming With Threads”\\
+Steve Kleiman, Devang Shah, Bart Smaalders\\
+Prentice Hall, January 1996\\
+本领域一本更好的书。值得收藏一本。\\
+
+
+[X+10] “Ad Hoc Synchronization Considered Harmful”\\
+Weiwei Xiong, Soyeon Park, Jiaqi Zhang, Yuanyuan Zhou, ZhiqiangMa\\
+OSDI 2010, Vancouver, Canada\\
+这篇文章展示了看似简单的同步代码是如何导致大量奇怪的bug的。用条件变量并正确的传递信号！
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
