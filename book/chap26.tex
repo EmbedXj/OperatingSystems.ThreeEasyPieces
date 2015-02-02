@@ -128,6 +128,7 @@ prints "main:end" &  &  \\
 \end{tabular}}
 \caption{\footnotesize 线程执行轨迹(3)}\color{black}\label{tab26-1}
 \end{table}
+
 \clearpage
 
 
@@ -167,9 +168,9 @@ int main(int argc, char *argv[]) {
 }
 \end{lstlisting}
 
-\begin{figure}[h]
-\caption{共享数据}
-\end{figure}
+%\begin{figure}[h]
+%\caption{共享数据}
+%\end{figure}
 
 \section{为何更糟糕：共享数据}
 上一节简单的线程示例可以有效的解释线程是如何被创建，以及它们是如何按照不同的顺序运行，这个执行顺序决定于调度器决定如何运行它们。这个示例并没有展示线程间在访问共享数据时是如何交互的。

@@ -67,13 +67,42 @@ int main(int argc, char *argv[]) {
 一旦创建了线程，就会存在一个新的存活的执行实体，与它自己的调用栈一起完成，跟程序中所有存在的线程一样运行在相同的地址空间。快乐之旅由此开始！
 
 \begin{lstlisting}
-#include <stdio.h>#include <pthread.h>#include <assert.h>#include <stdlib.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <assert.h>
+#include <stdlib.h>
 
-typedef struct __myarg_t {	int a;
-	int b;} myarg_t;typedef struct __myret_t {	int x;
-	int y;} myret_t;void *mythread(void *arg) {	myarg_t *m = (myarg_t *) arg;	printf("%d %d\n", m->a, m->b);	myret_t *r = Malloc(sizeof(myret_t));	r->x = 1;	r->y = 2;	return (void *) r;}int main(int argc, char *argv[]) {	int rc;	pthread_t p;	myret_t *m;
+typedef struct __myarg_t {
+	int a;
+	int b;
+} myarg_t;
+typedef struct __myret_t {
+	int x;
+	int y;
+} myret_t;
 
-	myarg_t args;	args.a = 10;	args.b = 20;	Pthread_create(&p, NULL, mythread, &args);	Pthread_join(p, (void **) &m);	printf("returned %d %d\n", m->x, m->y);	return 0;}
+void *mythread(void *arg) {
+	myarg_t *m = (myarg_t *) arg;
+	printf("%d %d\n", m->a, m->b);
+	myret_t *r = Malloc(sizeof(myret_t));
+	r->x = 1;
+	r->y = 2;
+	return (void *) r;
+}
+
+int main(int argc, char *argv[]) {
+	int rc;
+	pthread_t p;
+	myret_t *m;
+
+	myarg_t args;
+	args.a = 10;
+	args.b = 20;
+	Pthread_create(&p, NULL, mythread, &args);
+	Pthread_join(p, (void **) &m);
+	printf("returned %d %d\n", m->x, m->y);
+	return 0;
+}
 \end{lstlisting}
 \begin{figure}[h]
 \setlength{\abovecaptionskip}{1pt}
@@ -99,18 +128,36 @@ int pthread_join(pthread_t thread, void **value_ptr);
 
 \begin{figure}[h]
 \begin{lstlisting}
-void *mythread(void *arg) {	int m = (int) arg;	printf("%d\n", m);	return (void *) (arg + 1);}
+void *mythread(void *arg) {
+	int m = (int) arg;
+	printf("%d\n", m);
+	return (void *) (arg + 1);
+}
 
-int main(int argc, char *argv[]) {	pthread_t p;	int rc, m;	Pthread_create(&p, NULL, mythread, (void *) 100);	Pthread_join(p, (void **) &m);	printf("returned %d\n", m);	return 0;}
+int main(int argc, char *argv[]) {
+	pthread_t p;
+	int rc, m;
+	Pthread_create(&p, NULL, mythread, (void *) 100);
+	Pthread_join(p, (void **) &m);
+	printf("returned %d\n", m);
+	return 0;
+}
 \end{lstlisting}
-\setlength{\abovecaptionskip}{2pt}
+%\setlength{\abovecaptionskip}{2pt}
 \caption{等待线程完成}
 \end{figure}
 
 第三，需要非常注意返回值是如何从线程返回的。尤其，不要返回一个指向了线程调用栈中分配的值的指针。如果这么做了，你觉得会发生什么呢？（考虑一下）这里是一段问题代码的例子，改自图27.2中的例子。
 
 \begin{verbatim}
-void *mythread(void *arg) {    myarg_t *m = (myarg_t *) arg;    printf("%d %d\n", m->a, m->b);    myret_t r; // 分配在栈中: BAD!    r.x = 1;    r.y = 2;    return (void *) &r;}
+void *mythread(void *arg) {
+    myarg_t *m = (myarg_t *) arg;
+    printf("%d %d\n", m->a, m->b);
+    myret_t r; // 分配在栈中: BAD!
+    r.x = 1;
+    r.y = 2;
+    return (void *) &r;
+}
 \end{verbatim}
 
 在这种情况下，变量r是在mythread的栈中分配的。然而，当线程返回时，这个值会自动释放（这就是为什么栈使用起来这么简单）。因此，传回去的指针就是一个未分配的变量，可能会导致各种错误结果。当然，当你输出你觉得你返回了的值时，你很可能（不一定）会感到奇怪。可以自己试试看！【2. 幸运的是当你这样的代码时，编译器gcc可能会抱怨的，这也是一个注意编译器警告的原因】
@@ -155,7 +202,12 @@ assert(rc == 0); // always check success!
 
 \begin{figure}[h]
 \begin{verbatim}
-// Use this to keep your code clean but check for failures// Only use if exiting program is OK upon failurevoid Pthread_mutex_lock(pthread_mutex_t *mutex) {    int rc = pthread_mutex_lock(mutex);    assert(rc == 0);}
+// Use this to keep your code clean but check for failures
+// Only use if exiting program is OK upon failure
+void Pthread_mutex_lock(pthread_mutex_t *mutex) {
+    int rc = pthread_mutex_lock(mutex);
+    assert(rc == 0);
+}
 \end{verbatim}
 \setlength{\abovecaptionskip}{2pt}
 \caption{简单封装}
