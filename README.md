@@ -1,3 +1,10 @@
+## 致各位关注或者有心继续此项翻译工作的同学：
+本书是采用latex的方式编写及排版而成，在配置了中文latex环境后，下载本项目的全部文件，使用latex编辑器打开os-tep.tex文件即可编译本项目得到对应的pdf格式文档
+1. 中文latex环境安装及配置，作者使用的是Mac版本的textlive 2018
+2. 打开os-tep.tex即可编译本项目
+3. book目录为本项目的所有章节的tex文件，只需在此目录中参照前面章节添加tex文件并在2中更新章节即可
+4. 有需要继续向本项目继续共现代码的同学可以联系作者将其加入此项目的github共享者列表中
+
 # OS-TEP
 This project is the Chinese edition of the book——Operating Systems .Three Easy Pieces
 
